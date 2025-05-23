@@ -1,0 +1,16 @@
+- name: Run PostgreSQL container from your Docker Hub image
+  docker_container:
+    name: postgres-db
+    image: lytwz1/postgres-db:latest
+    env:
+      POSTGRES_DB: "db"
+      POSTGRES_USER: "usr"
+      POSTGRES_PASSWORD: "pwd"
+    ports:
+      - "5432:5432"
+    networks:
+      - name: network
+    state: started
+    restart_policy: unless-stopped
+  environment:
+    DOCKER_HOST: "unix:///var/run/docker.sock"

@@ -1,0 +1,10 @@
+- hosts: all
+  become: true
+  gather_facts: true
+
+  roles:
+    - docker
+    - create-network
+    - launch-database
+    - launch-app
+    - launch-proxy

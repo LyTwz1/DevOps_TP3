@@ -1,0 +1,6 @@
+- name: Create Docker network for app
+  docker_network:
+    name: network
+    state: present
+  environment:
+    DOCKER_HOST: unix:///var/run/docker.sock

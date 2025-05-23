@@ -1,0 +1,11 @@
+- name: Run proxy
+  docker_container:
+    name: httpd-proxy
+    image: lytwz1/httpd-proxy:latest
+    ports:
+      - "80:80"
+    networks:
+      - name: network
+    state: started
+  environment:
+    DOCKER_HOST: "unix:///var/run/docker.sock"
