@@ -1,6 +1,13 @@
 - hosts: all
-  gather_facts: false
+  gather_facts: true
   become: true
+
+  roles:
+    - docker
+    - create-network
+    - launch-database
+    - launch-app
+    - launch-proxy
 
   tasks:
     - name: Test connection
