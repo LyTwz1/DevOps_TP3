@@ -23,11 +23,15 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           
-      - name: Build and push backend API
+      - name: List directories to find correct path
+        run: |
+          ls -la
+          echo "Repository root contents:"
+          find . -maxdepth 2 -type d | sort
+      
+      - name: Build and push database image
         uses: docker/build-push-action@v4
         with:
-          context: ./backend-api  # Adjust path to your backend code
+          context: ./database
           push: true
-          tags: lytwz1/backend-api:latest
-          
-      # Add similar steps for database and proxy images if needed
+          tags: lytwz1/postgres-db:latest
