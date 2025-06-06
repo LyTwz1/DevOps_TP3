@@ -36,34 +36,43 @@ jobs:
         # Vérifier si de nouvelles images sont disponibles
         TRIGGER_DEPLOY="false"
         
-        # Obtenir les métadonnées des images
-        DB_IMAGE=$(curl -s "https://hub.docker.com/v2/repositories/lytwz1/postgres-db/tags/latest" | jq -r '.last_updated' 2>/dev/null || echo "")
-        API_IMAGE=$(curl -s "https://hub.docker.com/v2/repositories/lytwz1/backend-api/tags/latest" | jq -r '.last_updated' 2>/dev/null || echo "")
-        PROXY_IMAGE=$(curl -s "https://hub.docker.com/v2/repositories/lytwz1/httpd-proxy/tags/latest" | jq -r '.last_updated' 2>/dev/null || echo "")
+        # Obtenir les digests des images (plus fiable que la date)
+        DB_DIGEST=$(curl -s "https://hub.docker.com/v2/repositories/lytwz1/postgres-db/tags/latest" | jq -r '.images[0].digest // empty' 2>/dev/null || echo "")
+        API_DIGEST=$(curl -s "https://hub.docker.com/v2/repositories/lytwz1/backend-api/tags/latest" | jq -r '.images[0].digest // empty' 2>/dev/null || echo "")
+        PROXY_DIGEST=$(curl -s "https://hub.docker.com/v2/repositories/lytwz1/httpd-proxy/tags/latest" | jq -r '.images[0].digest // empty' 2>/dev/null || echo "")
         
-        echo "DB image last update: $DB_IMAGE"
-        echo "API image last update: $API_IMAGE"
-        echo "Proxy image last update: $PROXY_IMAGE"
+        echo "DB image digest: $DB_DIGEST"
+        echo "API image digest: $API_DIGEST"
+        echo "Proxy image digest: $PROXY_DIGEST"
         
-        # Si l'une des images a été mise à jour dans les dernières 24h, déclencher le déploiement
-        if [[ ! -z "$DB_IMAGE" && ! -z "$API_IMAGE" && ! -z "$PROXY_IMAGE" ]]; then
-          ONE_DAY_AGO=$(date -d "24 hours ago" -u +"%Y-%m-%dT%H:%M:%S")
-          
-          if [[ "$DB_IMAGE" > "$ONE_DAY_AGO" || "$API_IMAGE" > "$ONE_DAY_AGO" || "$PROXY_IMAGE" > "$ONE_DAY_AGO" ]]; then
-            echo "Recent updates detected in DockerHub images"
+        # Créer un fichier pour les digests actuels
+        echo "db:$DB_DIGEST" > current_digests.txt
+        echo "api:$API_DIGEST" >> current_digests.txt
+        echo "proxy:$PROXY_DIGEST" >> current_digests.txt
+        
+        # Vérifier si le fichier des digests précédents existe
+        if [ -f "previous_digests.txt" ]; then
+          # Comparer avec les digests précédents
+          if ! diff -q current_digests.txt previous_digests.txt > /dev/null; then
+            echo "Modifications d'images détectées!"
+            diff previous_digests.txt current_digests.txt || true
             TRIGGER_DEPLOY="true"
+          else
+            echo "Aucune modification d'image détectée"
           fi
         else
-          # Si une erreur s'est produite lors de la vérification, déployer quand même
-          echo "Could not check image updates, deploying anyway"
+          echo "Premier déploiement - aucun historique disponible"
           TRIGGER_DEPLOY="true"
         fi
         
         # En cas de push ou déclenchement manuel, déployer dans tous les cas
         if [[ "${{ github.event_name }}" == "push" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-          echo "Workflow triggered by push or manual dispatch"
+          echo "Workflow déclenché par push ou manuellement"
           TRIGGER_DEPLOY="true"
         fi
+        
+        # Sauvegarder les digests actuels pour la prochaine exécution
+        cp current_digests.txt previous_digests.txt
         
         echo "deploy=$TRIGGER_DEPLOY" >> $GITHUB_OUTPUT
       
