@@ -84,9 +84,9 @@ jobs:
       if: steps.check_images.outputs.deploy == 'true'
       run: |
         # Forcer le pull des dernières images
-        ansible all -i ansible/inventories/setup.yml -m shell -a "docker pull lytwz1/postgres-db:latest"
-        ansible all -i ansible/inventories/setup.yml -m shell -a "docker pull lytwz1/backend-api:latest"
-        ansible all -i ansible/inventories/setup.yml -m shell -a "docker pull lytwz1/httpd-proxy:latest"
+        ansible all -i ansible/inventories/setup.yml -m shell -a "docker pull lytwz1/postgres-db:latest" --become
+        ansible all -i ansible/inventories/setup.yml -m shell -a "docker pull lytwz1/backend-api:latest" --become
+        ansible all -i ansible/inventories/setup.yml -m shell -a "docker pull lytwz1/httpd-proxy:latest" --become
         
         # Déployer l'application
         ansible-playbook -i ansible/inventories/setup.yml ansible/deploy.yml
@@ -98,7 +98,7 @@ jobs:
         sleep 30
         
         # Vérifier que les conteneurs sont en cours d'exécution
-        ansible all -i ansible/inventories/setup.yml -m shell -a "docker ps"
+        ansible all -i ansible/inventories/setup.yml -m shell -a "docker ps" --become
         
         # Tester l'API
         curl -s http://dominique.yang.takima.cloud:8080/actuator/health || echo "API health check failed"
