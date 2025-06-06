@@ -1,0 +1,109 @@
+name: Continuous Deployment
+
+on:
+  # Se déclenche manuellement depuis l'interface GitHub
+  workflow_dispatch:
+  
+  # Se déclenche lors d'un push sur la branche main
+  push:
+    branches: [ main ]
+    
+  # Se déclenche selon un calendrier (pour vérifier les nouvelles images)
+  schedule:
+    - cron: '0 */4 * * *'  # Toutes les 4 heures
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Install Ansible and dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install ansible docker
+        
+    - name: Check for DockerHub image updates
+      id: check_images
+      run: |
+        # Vérifier si de nouvelles images sont disponibles
+        TRIGGER_DEPLOY="false"
+        
+        # Obtenir les métadonnées des images
+        DB_IMAGE=$(curl -s "https://hub.docker.com/v2/repositories/lytwz1/postgres-db/tags/latest" | jq -r '.last_updated' 2>/dev/null || echo "")
+        API_IMAGE=$(curl -s "https://hub.docker.com/v2/repositories/lytwz1/backend-api/tags/latest" | jq -r '.last_updated' 2>/dev/null || echo "")
+        PROXY_IMAGE=$(curl -s "https://hub.docker.com/v2/repositories/lytwz1/httpd-proxy/tags/latest" | jq -r '.last_updated' 2>/dev/null || echo "")
+        
+        echo "DB image last update: $DB_IMAGE"
+        echo "API image last update: $API_IMAGE"
+        echo "Proxy image last update: $PROXY_IMAGE"
+        
+        # Si l'une des images a été mise à jour dans les dernières 24h, déclencher le déploiement
+        if [[ ! -z "$DB_IMAGE" && ! -z "$API_IMAGE" && ! -z "$PROXY_IMAGE" ]]; then
+          ONE_DAY_AGO=$(date -d "24 hours ago" -u +"%Y-%m-%dT%H:%M:%S")
+          
+          if [[ "$DB_IMAGE" > "$ONE_DAY_AGO" || "$API_IMAGE" > "$ONE_DAY_AGO" || "$PROXY_IMAGE" > "$ONE_DAY_AGO" ]]; then
+            echo "Recent updates detected in DockerHub images"
+            TRIGGER_DEPLOY="true"
+          fi
+        else
+          # Si une erreur s'est produite lors de la vérification, déployer quand même
+          echo "Could not check image updates, deploying anyway"
+          TRIGGER_DEPLOY="true"
+        fi
+        
+        # En cas de push ou déclenchement manuel, déployer dans tous les cas
+        if [[ "${{ github.event_name }}" == "push" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          echo "Workflow triggered by push or manual dispatch"
+          TRIGGER_DEPLOY="true"
+        fi
+        
+        echo "deploy=$TRIGGER_DEPLOY" >> $GITHUB_OUTPUT
+      
+    - name: Configure SSH
+      if: steps.check_images.outputs.deploy == 'true'
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H dominique.yang.takima.cloud >> ~/.ssh/known_hosts
+      
+    - name: Test Ansible connection
+      if: steps.check_images.outputs.deploy == 'true'
+      run: |
+        ansible all -i ansible/inventories/setup.yml -m ping
+      
+    - name: Deploy with Ansible
+      if: steps.check_images.outputs.deploy == 'true'
+      run: |
+        # Forcer le pull des dernières images
+        ansible all -i ansible/inventories/setup.yml -m shell -a "docker pull lytwz1/postgres-db:latest"
+        ansible all -i ansible/inventories/setup.yml -m shell -a "docker pull lytwz1/backend-api:latest"
+        ansible all -i ansible/inventories/setup.yml -m shell -a "docker pull lytwz1/httpd-proxy:latest"
+        
+        # Déployer l'application
+        ansible-playbook -i ansible/inventories/setup.yml ansible/deploy.yml
+      
+    - name: Verify deployment
+      if: steps.check_images.outputs.deploy == 'true'
+      run: |
+        echo "Waiting for services to start..."
+        sleep 30
+        
+        # Vérifier que les conteneurs sont en cours d'exécution
+        ansible all -i ansible/inventories/setup.yml -m shell -a "docker ps"
+        
+        # Tester l'API
+        curl -s http://dominique.yang.takima.cloud:8080/actuator/health || echo "API health check failed"
+        
+        # Tester le proxy
+        curl -s http://dominique.yang.takima.cloud || echo "Proxy check failed"
+        
+        echo "Deployment verification completed"

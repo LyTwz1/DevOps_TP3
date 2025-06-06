@@ -2,6 +2,7 @@
   docker_container:
     name: backend-api
     image: lytwz1/backend-api:latest
+    pull: true
     env:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/db
       SPRING_DATASOURCE_USERNAME: usr

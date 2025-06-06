@@ -2,6 +2,7 @@
   docker_container:
     name: httpd-proxy
     image: lytwz1/httpd-proxy:latest
+    pull: true
     ports:
       - "80:80"
     networks:
