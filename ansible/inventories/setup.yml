@@ -1,10 +1,7 @@
 all:
   vars:
     ansible_user: admin
-    # Utilisation d'une variable conditionnelle pour la clé SSH
-    ansible_ssh_private_key_file: "{{ lookup('env', 'GITHUB_ACTIONS') | ternary('/home/runner/.ssh/id_rsa', '/home/lytwz/id_rsa') }}"
-    ansible_become: yes
-    ansible_become_method: sudo
+    ansible_ssh_private_key_file: /home/lytwz/id_rsa
   children:
     prod:
       hosts:
